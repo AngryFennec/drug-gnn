@@ -5,6 +5,9 @@
 \usepackage[T2A]{fontenc}			% кодировка
 \usepackage[utf8]{inputenc}			% кодировка исходного текста
 \usepackage[english,russian]{babel}	% локализация и переносы
+\usepackage{listings}
+\usepackage{graphicx}
+\graphicspath{ {./images/} }
 
 \author{Anastasia Nichiporchuk}
 \title{Drug Discovery via Graph Neural Networks}
@@ -15,6 +18,9 @@
 \maketitle
 
 \section*{Abstract}
+The paper considers a method for predicting solubility in water for various molecules using graph neural networks. The architecture of the neural network is given, neural network training on the AqSol dataset is considered, a test is conducted on the ESOL benchmark.
+
+// TODO: дописать про генеративную часть
 
 \section{Introduction}\label{1}
 
@@ -117,6 +123,109 @@ In this paper, the problems of predicting the solubility of a substance in water
 Since the molecule is essentially a graph, it is possible to use a graph neural network in the problem, preserving the original structure of the input data.
 
 // TODO: дописать тут про генеративную часть задачи
+
+\section{GNN approach}
+
+How could working with a graph using traditional machine learning methods look like? One could take the adjacency matrix of a graph, which is a matrix of zeros and ones (for graphs without weights) or a matrix of various numbers for graphs with weights. The vertices of the graph are located vertically and horizontally of such a matrix. If there is an edge between the vertices, units (or the weight of the edge) are set at the intersection of these vertices. If the vertices are not connected by an edge, zero remains in the matrix cell.
+Example of such matrix is below:
+
+\includegraphics[width=\textwidth]{adj.png}
+
+Intuitively, this seems to be a way out of the situation, but in fact, such a representation of the graph has a serious drawback. The vertices of the graph are not ordered, that is, it is impossible to uniquely arrange them by numbers 1, 2, 3 ... so that this order is always preserved. The vertices can be swapped (keeping the edges), while the graph will remain the same, and the adjacency matrix will change, that is, we will get one object with many different sets of features.
+
+For this reason, classical machine learning methods are poorly suited for working with graph structures.
+
+\subsection{Graph convolution neural networks (GCN)}
+GCNs are neural networks designed to perform convolutions over undirected graph data. Let's consider the main difference from CNN.
+
+\includegraphics[width=\textwidth]{layers.png}
+
+Here, x is a well-structured data - maybe, image or feature vector. And in GCN, the input will be a graph. Also, instead of inferring a single $z$, it infers the value $z_i$ for each node $i$ in the graph. And to make predictions for $Z_i$, GCN utilizes both $X_i$ and its neighboring nodes in the calculation.
+
+In GNN, single layer can be described with the following equation:
+\begin{equation}
+H^{l+1} = \sigma(D - \frac{1}{2}AD - \frac{1}{2}H^{(l)}W^{(l)})
+\end{equation}
+
+Here H represents the node embeddings within a graph, W represents a projection matrix, A represents the adjacency matrix of the graph with added self-connections, D represents a diagonal matrix that stores the degree of each node, and sigma represents an element-wise nonlinearity (like ReLU). The equation simply projects the node embeddings, computes each new embedding as the average of all of a node’s neighbors, and applies an element-wise nonlinearity to the new embeddings. These operations comprise a single graph convolutional layer, and these layers can be stacked to build a GCN:
+
+\includegraphics[width=\textwidth]{gcn_web.png}
+
+During some tests, in [KIPF-WELLING] was obtained, that the best results are obtained with a 2- or 3-layer model. Besides, with a deep GCN (more than 7 layers), it tends to get bad performances (dashed blue line). One solution is to use the residual connections between hidden layers (purple line)
+
+\includegraphics[width=\textwidth]{layers_num.png}
+
+\subsection{Selected model}
+My work uses a GCN with three layers and a linear output. As a function of the transition between layers, the $leaky_relu$ function showed the best results in the tests. Below is the model code:
+
+\begin{lstlisting}[language=Python]
+class GCN(torch.nn.Module):
+    def __init__(self, num_features, hidden_channels):
+        super(GCN, self).init()
+        torch.manual_seed(42)
+
+        self.conv1 = GCNConv(num_features, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.conv3 = GCNConv(hidden_channels, hidden_channels)
+        self.out = Linear(hidden_channels*2, 1)
+
+    def forward(self, x, edge_index, batch_index):
+        hidden = F.leaky_relu(self.conv1(x, edge_index))
+        hidden = F.leaky_relu(self.conv2(hidden, edge_index))
+        hidden = F.leaky_relu(self.conv3(hidden, edge_index))
+
+        hidden = torch.cat([gmp(hidden, batch_index), 
+                            gap(hidden, batch_index)], dim=1)
+
+        out = self.out(hidden)
+        return out, hidden
+\end{lstlisting}
+There are two input parameters in this model. The first, \begin{verbatim}num_features\end{verbatim} is the number of features, also this is the size of tensor with features. This parameters is obtains from dataset.
+Also, the second parameter, \begin{verbatim}hidden_channels\end{verbatim} is the model's parameter and may vary. During the tests, a parameter with a value of 64 showed good results.
+
+This model has a fairly simple architecture compared to, for example, MPNN (Message Passing Neural Network) or GAT (Graph Attention Network). She learns quite quickly, although the training time depends significantly on the size of the dataset. Metrics show a steady improvement in the loss function.
+
+\section{Datasets}
+A large number of datasets have been collected for tasks related to the study of molecules. Since this work is aimed at predicting a specific property of the molecule, accordingly, datasets related to solubility were selected.
+
+The model was trained on the AqSol dataset [https://www.nature.com/articles/s41597-019-0151-1 ], consists of aqueous solubility values of 9,982 unique compounds, along with some relevant topological and physico-chemical 2D descriptors. 
+
+To work with the model, it is important to have a SMILES string - one of the generally accepted formats for recording molecular structures in the form of a string, and AqSol contains such data.
+
+There are several solubility groups in this dataset: compounds with 0 and higher solubility value (highly soluble), those in the range of 0 to -2 (soluble), those in the range of -2 to -4 (slightly soluble) and insoluble if less than -4. Image below shows the distribution of solubility values.
+
+\includegraphics[width=\textwidth]{aqsol-distrib.png}
+
+The ESOL (Delaney) dataset is used to test the performance of the model on data other than the training dataset. It consists of 1128 molecules presented in SMILES format and data on their solubility. The solubility distribution can be seen on the graph:
+
+\includegraphics[width=\textwidth]{esol.png}
+
+\section{Obtained results} 
+GCN models were chosen to predict solubility. The AqSol dataset was used to train the model, and the ESOL dataset was used to test the trained model.
+Parameters with which the model was trained:
+$$hidden\_channels = 64$$
+$$batch\_size = 128$$
+$$optimizer = Adam$$
+$$lr = 0.0001$$
+$$metric = MSE$$
+$$epochs = 3000$$
+
+On the training dataset, the minimum value of the MSE metric corresponded to 0.44. The change in values by epoch is reflected in the graph:
+
+\includegraphics[width=\textwidth]{train.jpg}
+
+On the benchmark dataset, the minimum value of the MSE metric corresponded to 0.57. The change in values by epoch is reflected in the graph:
+
+\includegraphics[width=\textwidth]{bench.jpg}
+
+If we look for the solubility value by the formula using experimental data, the error can range from 0.5 to 1.6 logarithmic units. Therefore, such indicators for the metric are acceptable for the model and in some cases exceed the accuracy of the calculation using experimental data.
+
+\section{Conclusion}
+The paper considered the problem of predicting solubility in water by molecular structure. The substantiation of the relevance of the task is carried out. The GCN model was used for the solution, its training was performed on the AqSol dataset. The ESOL benchmark was used to test the model.
+
+The trained model is able to predict solubility for molecules in the SMILES format.
+
+Metrics show that the quality of the model is comparable to the error that occurs when calculating solubility based on experimental data, and in some cases the model shows better results.
 \end{document} % Конец текста.
 
 // https://users.math.msu.edu/users/weig/paper/p223.pdf
@@ -127,3 +236,8 @@ Since the molecule is essentially a graph, it is possible to use a graph neural 
 // https://www.researchgate.net/publication/351495116_Fusion_of_text_and_graph_information_for_machine_learning_problems_on_networks
 // https://www.nature.com/articles/s41597-019-0151-1
 // https://www.organic-chemistry.org/prog/peo/logS.html - картинка с распределением
+// http://snap.stanford.edu/class/cs224w-2021/slides/01-intro.pdf стр 60 - картинка для генерации
+// https://www.researchgate.net/figure/Different-types-of-graphs-and-their-corresponding-adjacency-matrix-representations-The_fig1_347300725 - картинка для матрицы графа
+// gcn https://tkipf.github.io/graph-convolutional-networks/
+// Kipf-Welling https://arxiv.org/pdf/1609.02907.pdf
+// https://pubmed.ncbi.nlm.nih.gov/15154768/ датасет Delaney
