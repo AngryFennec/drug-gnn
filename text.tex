@@ -17,8 +17,12 @@
 
 \maketitle
 
+\newpage
+\tableofcontents
+\newpage
+
 \section*{Abstract}
-The paper considers a method for predicting solubility in water for various molecules using graph neural networks. The architecture of the neural network is given, neural network training on the AqSol dataset is considered, a test is conducted on the ESOL benchmark.
+The paper considers a method for predicting solubility in water for various molecules using graph neural networks. The architecture of three graph neural networks is given, neural networks training on the AqSol dataset is considered, a test is conducted on the ESOL benchmark.
 
 // TODO: дописать про генеративную часть
 
@@ -104,8 +108,9 @@ Another important task is to match objects in scenes. It makes it possible to co
 \subsubsection*{Natural language processing}
 In natural language processing it is possible to represent a sequence of words as a simple graph. Such a format seems quite intuitive, but not much in demand. The representation of natural language in the form of graphs, such as dependency graphs, constituency graphs, AMR graphs and knowledge graphs, as well as text graphs containing multiple hierarchies of elements, i.e. document, sentence and word.
 
-// TODO: дописать про комбинацию NLP+GNN
-
+In some tasks, when graph contains text information. associated with each node, it is useful to combine text and network embeddings to increase total accuracy of the model
+ \cite{NLP-GNN}.
+ 
 \subsubsection*{Recommendation systems}
 Recommendation systems are designed to analyze user interests and predict what will be interesting to a particular user at the moment.
 
@@ -155,8 +160,44 @@ During some tests, in [KIPF-WELLING] was obtained, that the best results are obt
 
 \includegraphics[width=\textwidth]{layers_num.png}
 
-\subsection{Selected model}
-My work uses a GCN with three layers and a linear output. As a function of the transition between layers, the $leaky_relu$ function showed the best results in the tests. Below is the model code:
+\subsection{GAT}
+Graph Attention Network (GAT) \cite{GAT} is based on the idea of computing the hidden representations of each node in the graph by attending over its neighbors using a self-attention strategy.
+
+By staking layers, nodes can attend to their neighborhood node features by specifying different weights to different nodes and not needing costly matrix operation or knowing the graph structure upfront.
+
+To compute one single GAT layer, we initialized weight matrix $W$ and define the equation to compute attention coefficient:
+\begin{equation}
+    e_{ij} = a(Wh_i,Wh_j), 
+\end{equation}
+which means the inportance of node j's features to node i. In this equation $a$ called shared attentional mechanism. Then we computes $e_{ij}$ only for neighbors and use them to compute $\alpha_{ij}$:
+\begin{equation}
+    \alpha_{ij} = softmax(e_{ij})
+\end{equation}
+In the original work [GAT] authors use LeakyReLu function as attention mechanism.
+
+The aggregated features of each node can be compute by equation:
+\begin{equation}
+    h_i = \sigma(\sum_{j \in neibs(i)}\alpha_{ij}Wh_j),
+\end{equation}
+where sigma is some nonlinear activation function. This process is illustrated by the image:
+
+\includegraphics[width=\textwidth]{gat.png}
+
+
+\subsection{GraphSAGE}
+GraphSAGE \cite{SAGE} is based on SAmpling and aggreGatE, where it samples only a subset of neighboring nodes at different depth layers. It then aggregates the neighbors of the previous layers using an aggregator.
+
+At each iteration, nodes aggregate information from their local neighbors based on sampling. Each aggregator function aggregates information from a different number of search depth, away from a given node. As a result, nodes incrementally gain more and more information from further reaches of the graph. The goal of GraphSAGE is to learn a representation for every node based on some combination of its neighbouring nodes.
+
+GraphSAGE is that it was the first work to create inductive node embeddings in an unsupervised way. At the first stage, forward propagation occurs, which results in embeddings for the nodes of the graph. Next, aggregator functions aggregate feature information from nodes, which were embedded earlier. Then we use aggregated information to predict graph context.
+
+\includegraphics[width=\textwidth]{sage.png}
+
+This architecture using for single SAGEConv layer, and GraphSAGE neural network is usually consists of some SAGEConv layers.
+
+\subsection{Selected models}
+My work uses three models with different layers and similar architecture:
+GCN, GAT and GraphSAGE with three layers and a linear output. As a function of the transition between layers, the $leaky_relu$ function showed the best results in the tests. Below is the GCN model code:
 
 \begin{lstlisting}[language=Python]
 class GCN(torch.nn.Module):
@@ -180,6 +221,8 @@ class GCN(torch.nn.Module):
         out = self.out(hidden)
         return out, hidden
 \end{lstlisting}
+
+GAT and GraphSAGE are the similar, but using GATConv and SAGEConv layers.
 There are two input parameters in this model. The first, \begin{verbatim}num_features\end{verbatim} is the number of features, also this is the size of tensor with features. This parameters is obtains from dataset.
 Also, the second parameter, \begin{verbatim}hidden_channels\end{verbatim} is the model's parameter and may vary. During the tests, a parameter with a value of 64 showed good results.
 
@@ -204,28 +247,83 @@ The ESOL (Delaney) dataset is used to test the performance of the model on data 
 GCN models were chosen to predict solubility. The AqSol dataset was used to train the model, and the ESOL dataset was used to test the trained model.
 Parameters with which the model was trained:
 $$hidden\_channels = 64$$
-$$batch\_size = 128$$
+$$batch\_size = 64$$
 $$optimizer = Adam$$
-$$lr = 0.0001$$
+$$lr = 0.0007$$
 $$metric = MSE$$
 $$epochs = 3000$$
 
-On the training dataset, the minimum value of the MSE metric corresponded to 0.44. The change in values by epoch is reflected in the graph:
+On the training dataset, the minimum value of the MSE metric corresponded to 0.254 with GraphSAGE.
+\begin{center}
+\begin{tabular}{ |c|c|c|c| }
+\hline
+  & GCN & GAT & GraphSAGE \\ 
+ \hline
+ Min MSE & 0.398 & 0.440 & 0.254 \\  
+ \hline
+ Mean MSE & 0.791 & 0.804 & 0.536   \\
+ \hline
+\end{tabular}
+\end{center}
+The change in values by epoch on GCN is reflected in the graph:
 
-\includegraphics[width=\textwidth]{train.jpg}
+\includegraphics[width=\textwidth]{gcn_train.png}
 
-On the benchmark dataset, the minimum value of the MSE metric corresponded to 0.57. The change in values by epoch is reflected in the graph:
+The change in values by epoch on GAT is reflected in the graph:
 
-\includegraphics[width=\textwidth]{bench.jpg}
+\includegraphics[width=\textwidth]{gat_train.png}
+
+The change in values by epoch on GraphSAGE is reflected in the graph:
+
+\includegraphics[width=\textwidth]{sage_train.png}
+
+On the benchmark dataset, the minimum value of the MSE metric corresponded to 0.281 with GraphSAGE. 
+\begin{center}
+\begin{tabular}{ |c|c|c|c| }
+\hline
+  & GCN & GAT & GraphSAGE \\ 
+ \hline
+ Min MSE & 0.394 & 0.469 & 0.281 \\  
+ \hline
+ Mean MSE & 0.485 & 0.599 &  0.406  \\
+ \hline
+\end{tabular}
+\end{center}
+The change in values by epoch on GCN is reflected in the graph:
+
+\includegraphics[width=\textwidth]{gcn_test.png}
+
+The change in values by epoch on GAT is reflected in the graph:
+
+\includegraphics[width=\textwidth]{gat_test.png}
+
+The change in values by epoch on GraphSAGE is reflected in the graph:
+
+\includegraphics[width=\textwidth]{sage_test.png}
 
 If we look for the solubility value by the formula using experimental data, the error can range from 0.5 to 1.6 logarithmic units. Therefore, such indicators for the metric are acceptable for the model and in some cases exceed the accuracy of the calculation using experimental data.
 
 \section{Conclusion}
-The paper considered the problem of predicting solubility in water by molecular structure. The substantiation of the relevance of the task is carried out. The GCN model was used for the solution, its training was performed on the AqSol dataset. The ESOL benchmark was used to test the model.
+The paper considered the problem of predicting solubility in water by molecular structure. The substantiation of the relevance of the task is carried out. The GCN, GAT and GraphSAGE models were used for the solution, those training was performed on the AqSol dataset. The ESOL benchmark was used to test the model.
 
-The trained model is able to predict solubility for molecules in the SMILES format.
+The trained models is able to predict solubility for molecules in the SMILES format.
 
-Metrics show that the quality of the model is comparable to the error that occurs when calculating solubility based on experimental data, and in some cases the model shows better results.
+Metrics show that the quality of the models is comparable to the error that occurs when calculating solubility based on experimental data, and in some cases the models shows better results.
+
+If we compare the results shown by the models, then GraphSAGE showed the best minimum values for the training and test datasets and the best average values for all epochs.
+
+\newpage
+\section*{References}
+\begin{thebibliography}{9}
+\bibitem{SAGE}
+Hamilton, W., Ying, Z., Leskovec, J. (2017), \emph{Inductive Representation Learning on Large Graphs}, Advances in Neural Information Processing Systems , 1024-1034.
+\bibitem{GAT}
+Veličković, P., Cucurull, G., Casanova, A., Romero, A., Liò, P., Bengio, Y. (2017), \emph{Graph Attention Networks}, 6th International Conference on Learning Representations.
+\bibitem{NLP-GNN}
+Makarov I, Makarov M, Kiselev D. 2021. \emph{Fusion of text and graph information for machine learning problems on networks.} PeerJ Computer Science 7:e526.
+\end{thebibliography}
+
+
 \end{document} % Конец текста.
 
 // https://users.math.msu.edu/users/weig/paper/p223.pdf
@@ -233,7 +331,6 @@ Metrics show that the quality of the model is comparable to the error that occur
 // https://github.com/Dyakonov/DL/blob/master/ESSE_2021/E103_GNN.pdf
 // https://drive.google.com/file/d/1Oxo4WHLjDBCNoqJX6uxf9KzdF4f1d9tO/view
 // https://mlcourse.at.ispras.ru/wp-content/uploads/2020/11/%D0%9D%D0%B5%D0%B9%D1%80%D0%BE%D0%BD%D0%BD%D1%8B%D0%B5_%D1%81%D0%B5%D1%82%D0%B8_%D0%B4%D0%BB%D1%8F_%D0%B0%D0%BD%D0%B0%D0%BB%D0%B8%D0%B7%D0%B0_%D0%B3%D1%80%D0%B0%D1%84%D0%BE%D0%B2.pdf
-// https://www.researchgate.net/publication/351495116_Fusion_of_text_and_graph_information_for_machine_learning_problems_on_networks
 // https://www.nature.com/articles/s41597-019-0151-1
 // https://www.organic-chemistry.org/prog/peo/logS.html - картинка с распределением
 // http://snap.stanford.edu/class/cs224w-2021/slides/01-intro.pdf стр 60 - картинка для генерации
@@ -241,3 +338,8 @@ Metrics show that the quality of the model is comparable to the error that occur
 // gcn https://tkipf.github.io/graph-convolutional-networks/
 // Kipf-Welling https://arxiv.org/pdf/1609.02907.pdf
 // https://pubmed.ncbi.nlm.nih.gov/15154768/ датасет Delaney
+
+
+// https://arxiv.org/pdf/1710.10903.pdf GAT
+// https://arxiv.org/pdf/1706.02216.pdf GraphSAGE
+// https://peerj.com/articles/cs-526/
