@@ -4,16 +4,17 @@
 \usepackage{cmap}					% поиск в PDF
 \usepackage[T2A]{fontenc}			% кодировка
 \usepackage[utf8]{inputenc}			% кодировка исходного текста
-\usepackage[english,russian]{babel}	% локализация и переносы
+\usepackage[english]{babel}	% локализация и переносы
 \usepackage{listings}
 \usepackage{graphicx}
+\usepackage{float}
 \graphicspath{ {./images/} }
 
 \author{Anastasia Nichiporchuk}
 \title{Drug Discovery via Graph Neural Networks}
 \date{\today}
 
-\begin{document} % Конец преамбулы, начало текста.
+\begin{document}
 
 \maketitle
 
@@ -22,9 +23,9 @@
 \newpage
 
 \section*{Abstract}
-The paper considers a method for predicting solubility in water for various molecules using graph neural networks. The architecture of three graph neural networks is given, neural networks training on the AqSol dataset is considered, a test is conducted on the ESOL benchmark.
+For clinical testing and drug development, it is important not only to find a substance that can have the desired effect on the body, but also to pack it into a ready-for-consumption form. This is significantly influenced by the aqueous solubility of molecules. A lot of work has been devoted to the solubility search (for example, \cite{Sol1} \cite{Sol2}), but the main problem remains the accuracy of the proposed models. 
 
-// TODO: дописать про генеративную часть
+In this paper, GCN, GAT, GraphSAGE models working with graph representation of molecules are considered. The models are trained on the AqSol dataset, and the ESOL dataset is used for testing. The quality of the obtained model results is compared, the GraphSAGE model is determined as the best, and the accuracy of the models and the solubility calculation based on experimental data are compared.
 
 \section{Introduction}\label{1}
 
@@ -39,7 +40,7 @@ This is due to the fact that conducting any laboratory research requires time an
 
 With the development of computing power, as well as biotechnology and cheminformatics, it has become possible to use neural networks as such empirical methods. A neural network trained for a specific task can predict certain data and minimize unsuccessful laboratory tests.
 
-\section{Solubility}\label{2}
+\subsection{Solubility}\label{2}
 Solubility is the maximum amount of solute that can be dissolved in a known amount of solvent at a particular temperature.
 
 Factors affecting solubility:
@@ -52,13 +53,14 @@ Factors affecting solubility:
 \end {itemize}
 
 Aqueous solubility, denoted by S, or its logarithm value log Is very important molecular property. Identification of
-molecules with undesirable solubility in water at early stages is of great importance in drug development and in other related fields of pharmacy, since solubility affects the processes of absorption, distribution, metabolism and elimination (ADME).
+molecules with undesirable solubility in water at early stages is of great importance in drug development and in other related fields of pharmacology, since solubility affects the processes of absorption, distribution, metabolism and elimination (ADME) \cite{ADME}.
 
-A number of existing QSPR models developed to predict solubility show that solubility is related to experimental indicators such as melting point and separation coefficient.
+A number of existing QSPR \cite{QSPR} models developed to predict solubility show that solubility is related to experimental indicators such as melting point and separation coefficient.
 However, the data obtained experimentally often contain measurement errors. This increases the difficulty of predicting solubility.
 
 The most using formula of solubility is:
 \begin {equation}
+\label{e1}
  logS =  0.5 - 0.01(MP - 25) - logP,
 \end{equation}
 where MP is melting point and logP is the log of the octanol-water partition coefficient.
@@ -72,6 +74,44 @@ The most popular forms of drugs are tablets and solutions for injection. It is n
 
 Solubility can also affect the absorption of the active ingredient and its stability while in the dosage form. Thus, it can be determined that the better the solubility of the substance in water, the easier and cheaper it will be to use to make the drug.
 
+\subsection{Methods of calculating solubility}
+There are two fundamentally different ways to obtain the solubility value of a particular substance. The first is to use experimental data and calculate using the equation (\ref{e1}).
+
+The second way is to use various machine learning and deep learning methods. Many articles are devoted to such methods, for example, \cite{Sol5}\cite{Sol6}. The effectiveness and speed of the methods vary greatly. One of the main problems is that the molecule that is used as input has an irregular structure and is difficult to adapt to classical methods used in other fields, such as computer vision or NLP.
+
+How can we improve the interaction of molecular data and neural networks?
+
+\subsection{Recent work}
+In this paper, the problems of predicting the solubility of a substance in water based on the structure of a molecule are considered. As described above, solubility is an important property for the production of drugs, which can be calculated using experimental (and therefore not very accurate) data. Therefore, it is advisable to use a neural network to predict this property.
+
+Since the molecule is essentially a graph, it is possible to use a graph neural network in the problem, preserving the original structure of the input data.
+
+Contribution of this work is to construct several GNN models and to compare those results on solubility prediction.
+
+Let's formalize the task. The molecule is initially represented as a SMILES string \cite{SMILES}. To get a graph from it, we use the RDKit library \cite{RDKIT}, which contains tools for working with molecules, and PyG library \cite{PyG}. So we have an input data - molecular homogeneous graph $G$, and an output data - numeric value $y$, which means molecule solubility. And the problem is to find model $f(G)$:
+\begin{equation}
+    y = f(G).
+\end{equation}
+Of course, we cannot find the exact model, so we will look for such $\tilde f(G)$ so that the following condition is met:
+$$
+    \tilde y = \tilde f(G),
+$$
+$$
+    Loss(y, \tilde y) \to min.
+$$
+
+We will use the MSE (Mean Squared Error) metric as Loss:
+$$
+    Loss(y, \tilde y) = \sqrt{y^2 -  \tilde y^2}.
+$$
+
+Thus, we defined the regression problem. 
+
+In recent work, we will consider graph neural networks and some models: Graph Convolution Network (GCN), Graph Attention Network (GAT) and GraphSAGE model. 
+
+To train and test models, two datasets will be used - AqSol and ESOL. 
+
+At last, we compare results from all three models and try to explain it.
 \section{Graph Neural Networks}\label{3}
 
 Graph neural networks are a class of neural networks that allow you to apply deep learning techniques to a variety of data that can be represented as a graph. Graph data has no regular structure, like pictures (it is known exactly how many neighbors a pixel has) or texts (there is a sequence of words in a sentence). Therefore, classical neural networks are not well suited to this kind of data. At the same time, the variety of such data in the real world is very large - as an example, we can consider social networks, routes, and molecular structures. 
@@ -84,9 +124,9 @@ There are several different types of graph problems:
   \item community detection (the problem of searching for clusters in a graph).
 \end{enumerate}
 
-The first type can include various tasks of prediction and classification of graph vertices, for example, prediction of the topic of an article on the basis of citations. 
+The first type can include various tasks of prediction and classification of graph nodes, for example, prediction of the topic of an article on the basis of citations. 
 
-The second type includes tasks related to a pair of vertices or edges, the so-called "link prediction" tasks. As an example of such a problem, we can consider recommendation systems that predict whether a user is suitable for a service offered. 
+The second type includes tasks related to a pair of nodes or edges, the so-called "link prediction" tasks. As an example of such a problem, we can consider recommendation systems that predict whether a user is suitable for a service offered. 
 
 The third type, graph prediction, involves problems where a graph is treated as an object and the output is an estimate of its property. These can be both classification and regression problems. Such problems are often used when considering molecules to predict their properties.
 
@@ -94,73 +134,33 @@ Clustering tasks belong to unsupervised learning and can be used, for example, t
 
 Below we will consider in more detail in which areas graph neural networks are used.
 
-\subsection{Graph neural networks in different tasks}\label{4}
-
-\subsubsection*{Computer vision}
-
-In computer vision classical neural network models are actively used, in particular CNN. However, if we consider an image as a graph, in which each pixel is a vertex of the graph, and the neighborhood with other pixels determines the presence of edges between the corresponding vertices, it becomes possible to apply GNN for appropriate tasks related to images.
-
-In addition, graphs are actively used for more complex tasks involving relations between image objects.
-One such task is scene graph generation, in which the goal of the model is to parse an image into a semantic graph consisting of objects and their semantic relations. From the image data, the model detects and recognizes objects and predicts semantic relationships between pairs of objects.
-
-Another important task is to match objects in scenes. It makes it possible to compile three-dimensional models from the available video footage, which are used for the modeling and mapping (SLAM). If certain hardware conditions are met, such models can also work in real time.
-
-\subsubsection*{Natural language processing}
-In natural language processing it is possible to represent a sequence of words as a simple graph. Such a format seems quite intuitive, but not much in demand. The representation of natural language in the form of graphs, such as dependency graphs, constituency graphs, AMR graphs and knowledge graphs, as well as text graphs containing multiple hierarchies of elements, i.e. document, sentence and word.
-
-In some tasks, when graph contains text information. associated with each node, it is useful to combine text and network embeddings to increase total accuracy of the model
- \cite{NLP-GNN}.
- 
-\subsubsection*{Recommendation systems}
-Recommendation systems are designed to analyze user interests and predict what will be interesting to a particular user at the moment.
-
-Recommendation systems are divided into two fundamentally different types - off-line models (detection of global patterns, personalized model for a specific object) and online models (fast response, detection of current actual trends). 
-
-Graphs are actively used for offline models. are used by large companies in their products (Alibaba, Uber, Pinterest) to prepare personalized offers for users based on their actions and reactions. In this case, the user and the product can be represented as vertices of the graph, and their interaction as an edge of the graph.
-
-\subsubsection*{Natural science}
+\subsection{Graph neural networks in natural science}\label{4}
 
 Chemistry, biology, and other natural sciences have been and remain one of the main driving forces in the development of GNN. The reason for this is that these sciences pose problems closely related to data in the form of graphs - molecules and materials. Also, these problems often require significant computational power when solved by classical methods, so it is appropriate to use machine learning methods for them. In general, when comparing classical methods of machine learning and GNN, the latter show better results.
 
-\section{Recent work}
-In this paper, the problems of predicting the solubility of a substance in water based on the structure of a molecule are considered. As described above, solubility is an important property for the production of drugs, which can be calculated using experimental (and therefore not very accurate) data. Therefore, it is advisable to use a neural network to predict this property.
+\subection{GNN approach}
 
-Since the molecule is essentially a graph, it is possible to use a graph neural network in the problem, preserving the original structure of the input data.
+How could working with a graph using traditional machine learning methods look like? One could take the adjacency matrix of a graph, which is a matrix of zeros and ones (for graphs without weights) or a matrix of various numbers for graphs with weights. The nodes of the graph are located vertically and horizontally of such a matrix. If there is an edge between the nodes, units (or the weight of the edge) are set at the intersection of these nodes. If the nodes are not connected by an edge, zero remains in the matrix cell.
 
-// TODO: дописать тут про генеративную часть задачи
-
-\section{GNN approach}
-
-How could working with a graph using traditional machine learning methods look like? One could take the adjacency matrix of a graph, which is a matrix of zeros and ones (for graphs without weights) or a matrix of various numbers for graphs with weights. The vertices of the graph are located vertically and horizontally of such a matrix. If there is an edge between the vertices, units (or the weight of the edge) are set at the intersection of these vertices. If the vertices are not connected by an edge, zero remains in the matrix cell.
-Example of such matrix is below:
-
-\includegraphics[width=\textwidth]{adj.png}
-
-Intuitively, this seems to be a way out of the situation, but in fact, such a representation of the graph has a serious drawback. The vertices of the graph are not ordered, that is, it is impossible to uniquely arrange them by numbers 1, 2, 3 ... so that this order is always preserved. The vertices can be swapped (keeping the edges), while the graph will remain the same, and the adjacency matrix will change, that is, we will get one object with many different sets of features.
+Intuitively, this seems to be a way out of the situation, but in fact, such a representation of the graph has a serious drawback. The nodes of the graph are not ordered, that is, it is impossible to uniquely arrange them by numbers 1, 2, 3 ... so that this order is always preserved. The nodes can be swapped (keeping the edges), while the graph will remain the same, and the adjacency matrix will change, that is, we will get one object with many different sets of features.
 
 For this reason, classical machine learning methods are poorly suited for working with graph structures.
 
 \subsection{Graph convolution neural networks (GCN)}
 GCNs are neural networks designed to perform convolutions over undirected graph data. Let's consider the main difference from CNN.
 
-\includegraphics[width=\textwidth]{layers.png}
-
-Here, x is a well-structured data - maybe, image or feature vector. And in GCN, the input will be a graph. Also, instead of inferring a single $z$, it infers the value $z_i$ for each node $i$ in the graph. And to make predictions for $Z_i$, GCN utilizes both $X_i$ and its neighboring nodes in the calculation.
+In CNNs, x is a well-structured data - maybe, image or feature vector. And in GCN, the input will be a graph. Also, instead of inferring a single $z$, it infers the value $z_i$ for each node $i$ in the graph. And to make predictions for $Z_i$, GCN utilizes both $X_i$ and its neighboring nodes in the calculation.
 
 In GNN, single layer can be described with the following equation:
 \begin{equation}
 H^{l+1} = \sigma(D - \frac{1}{2}AD - \frac{1}{2}H^{(l)}W^{(l)})
 \end{equation}
 
-Here H represents the node embeddings within a graph, W represents a projection matrix, A represents the adjacency matrix of the graph with added self-connections, D represents a diagonal matrix that stores the degree of each node, and sigma represents an element-wise nonlinearity (like ReLU). The equation simply projects the node embeddings, computes each new embedding as the average of all of a node’s neighbors, and applies an element-wise nonlinearity to the new embeddings. These operations comprise a single graph convolutional layer, and these layers can be stacked to build a GCN:
+Here H represents the node embeddings within a graph, W represents a projection matrix, A represents the adjacency matrix of the graph with added self-connections, D represents a diagonal matrix that stores the degree of each node, and sigma represents an element-wise nonlinearity (like ReLU). The equation simply projects the node embeddings, computes each new embedding as the average of all of a node’s neighbors, and applies an element-wise nonlinearity to the new embeddings. These operations comprise a single graph convolutional layer, and these layers can be stacked to build a GCN.
 
-\includegraphics[width=\textwidth]{gcn_web.png}
+During some tests, in \cite{GCN} was obtained, that the best results are obtained with a 2- or 3-layer model. Besides, with a deep GCN (more than 7 layers), it tends to get bad performances.
 
-During some tests, in [KIPF-WELLING] was obtained, that the best results are obtained with a 2- or 3-layer model. Besides, with a deep GCN (more than 7 layers), it tends to get bad performances (dashed blue line). One solution is to use the residual connections between hidden layers (purple line)
-
-\includegraphics[width=\textwidth]{layers_num.png}
-
-\subsection{GAT}
+\subsection{Graph Attention Networks (GAT)}
 Graph Attention Network (GAT) \cite{GAT} is based on the idea of computing the hidden representations of each node in the graph by attending over its neighbors using a self-attention strategy.
 
 By staking layers, nodes can attend to their neighborhood node features by specifying different weights to different nodes and not needing costly matrix operation or knowing the graph structure upfront.
@@ -173,16 +173,13 @@ which means the inportance of node j's features to node i. In this equation $a$ 
 \begin{equation}
     \alpha_{ij} = softmax(e_{ij})
 \end{equation}
-In the original work [GAT] authors use LeakyReLu function as attention mechanism.
+In the original work \cite{GAT} authors use LeakyReLu function as attention mechanism.
 
 The aggregated features of each node can be compute by equation:
 \begin{equation}
     h_i = \sigma(\sum_{j \in neibs(i)}\alpha_{ij}Wh_j),
 \end{equation}
-where sigma is some nonlinear activation function. This process is illustrated by the image:
-
-\includegraphics[width=\textwidth]{gat.png}
-
+where sigma is some nonlinear activation function. 
 
 \subsection{GraphSAGE}
 GraphSAGE \cite{SAGE} is based on SAmpling and aggreGatE, where it samples only a subset of neighboring nodes at different depth layers. It then aggregates the neighbors of the previous layers using an aggregator.
@@ -191,67 +188,66 @@ At each iteration, nodes aggregate information from their local neighbors based 
 
 GraphSAGE is that it was the first work to create inductive node embeddings in an unsupervised way. At the first stage, forward propagation occurs, which results in embeddings for the nodes of the graph. Next, aggregator functions aggregate feature information from nodes, which were embedded earlier. Then we use aggregated information to predict graph context.
 
-\includegraphics[width=\textwidth]{sage.png}
-
 This architecture using for single SAGEConv layer, and GraphSAGE neural network is usually consists of some SAGEConv layers.
 
 \subsection{Selected models}
 My work uses three models with different layers and similar architecture:
-GCN, GAT and GraphSAGE with three layers and a linear output. As a function of the transition between layers, the $leaky_relu$ function showed the best results in the tests. Below is the GCN model code:
+GCN, GAT and GraphSAGE with three layers and a linear output. As a function of the transition between layers, the $leaky_relu$ function showed the best results in the tests. Below is the GCN architecture:
+\newline
 
-\begin{lstlisting}[language=Python]
-class GCN(torch.nn.Module):
-    def __init__(self, num_features, hidden_channels):
-        super(GCN, self).init()
-        torch.manual_seed(42)
-
-        self.conv1 = GCNConv(num_features, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, hidden_channels)
-        self.conv3 = GCNConv(hidden_channels, hidden_channels)
-        self.out = Linear(hidden_channels*2, 1)
-
-    def forward(self, x, edge_index, batch_index):
-        hidden = F.leaky_relu(self.conv1(x, edge_index))
-        hidden = F.leaky_relu(self.conv2(hidden, edge_index))
-        hidden = F.leaky_relu(self.conv3(hidden, edge_index))
-
-        hidden = torch.cat([gmp(hidden, batch_index), 
-                            gap(hidden, batch_index)], dim=1)
-
-        out = self.out(hidden)
-        return out, hidden
-\end{lstlisting}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{gcn.jpg}
+    \caption{GCN architecture}
+\end{figure}
 
 GAT and GraphSAGE are the similar, but using GATConv and SAGEConv layers.
+
+GCN was chosen because it has a fast counting speed. This is a fairly simple, basic model that shows balanced results in both speed and accuracy.
+
+GAT is a model that uses information both from neighboring nodes to the current one and from edges. This model is considered to compare it with GCN and GraphSAGE, which use only nodes. The speed of counting GAT is inferior to GCN, but comparable to GraphSAGE.
+
+GraphSAGE is essentially a modified GCN model that takes into account not only current layer's features, but also each node’s own features from the previous layer during updation. GraphSAGE is powerfull, but not very fast. It was choosen to consider nodes with their neighbours to receive good computational results.
+
 There are two input parameters in this model. The first, \begin{verbatim}num_features\end{verbatim} is the number of features, also this is the size of tensor with features. This parameters is obtains from dataset.
 Also, the second parameter, \begin{verbatim}hidden_channels\end{verbatim} is the model's parameter and may vary. During the tests, a parameter with a value of 64 showed good results.
 
-This model has a fairly simple architecture compared to, for example, MPNN (Message Passing Neural Network) or GAT (Graph Attention Network). She learns quite quickly, although the training time depends significantly on the size of the dataset. Metrics show a steady improvement in the loss function.
+This model's arhitecture has a fairly simple architecture It learns quite quickly, although the training time depends significantly on the size of the dataset.
 
-\section{Datasets}
-A large number of datasets have been collected for tasks related to the study of molecules. Since this work is aimed at predicting a specific property of the molecule, accordingly, datasets related to solubility were selected.
-
-The model was trained on the AqSol dataset [https://www.nature.com/articles/s41597-019-0151-1 ], consists of aqueous solubility values of 9,982 unique compounds, along with some relevant topological and physico-chemical 2D descriptors. 
-
-To work with the model, it is important to have a SMILES string - one of the generally accepted formats for recording molecular structures in the form of a string, and AqSol contains such data.
-
-There are several solubility groups in this dataset: compounds with 0 and higher solubility value (highly soluble), those in the range of 0 to -2 (soluble), those in the range of -2 to -4 (slightly soluble) and insoluble if less than -4. Image below shows the distribution of solubility values.
-
-\includegraphics[width=\textwidth]{aqsol-distrib.png}
-
-The ESOL (Delaney) dataset is used to test the performance of the model on data other than the training dataset. It consists of 1128 molecules presented in SMILES format and data on their solubility. The solubility distribution can be seen on the graph:
-
-\includegraphics[width=\textwidth]{esol.png}
-
-\section{Obtained results} 
-GCN models were chosen to predict solubility. The AqSol dataset was used to train the model, and the ESOL dataset was used to test the trained model.
-Parameters with which the model was trained:
+Parameters with which the models were trained:
 $$hidden\_channels = 64$$
 $$batch\_size = 64$$
 $$optimizer = Adam$$
 $$lr = 0.0007$$
 $$metric = MSE$$
 $$epochs = 3000$$
+
+\section{Datasets}
+A large number of datasets have been collected for tasks related to the study of molecules. Since this work is aimed at predicting a specific property of the molecule, accordingly, datasets related to solubility were selected.
+
+The model was trained on the AqSol dataset \cite{AqSol}, consists of aqueous solubility values of 9,982 unique compounds, along with some relevant topological and physico-chemical 2D descriptors. 
+
+To work with the model, it is important to have a SMILES string - one of the generally accepted formats for recording molecular structures in the form of a string, and AqSol contains such data.
+
+There are several solubility groups in this dataset: compounds with 0 and higher solubility value (highly soluble), those in the range of 0 to -2 (soluble), those in the range of -2 to -4 (slightly soluble) and insoluble if less than -4. Image below shows the distribution of solubility values.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{aqsol.jpg}
+    \caption{AqSol Solubility Distribution}
+\end{figure}
+
+
+The ESOL (Delaney) dataset \cite{ESOL} is used to test the performance of the model on data other than the training dataset. It consists of 1128 molecules presented in SMILES format and data on their solubility. The solubility in ESOL dataset has rather similar to AqSol distribution:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{esol.jpg}
+    \caption{ESOL Solubility Distribution}
+\end{figure}
+
+\section{Experiment results} 
+GCN models were chosen to predict solubility. The AqSol dataset was used to train the model, and the ESOL dataset was used to test the trained model.
 
 On the training dataset, the minimum value of the MSE metric corresponded to 0.254 with GraphSAGE.
 \begin{center}
@@ -265,17 +261,6 @@ On the training dataset, the minimum value of the MSE metric corresponded to 0.2
  \hline
 \end{tabular}
 \end{center}
-The change in values by epoch on GCN is reflected in the graph:
-
-\includegraphics[width=\textwidth]{gcn_train.png}
-
-The change in values by epoch on GAT is reflected in the graph:
-
-\includegraphics[width=\textwidth]{gat_train.png}
-
-The change in values by epoch on GraphSAGE is reflected in the graph:
-
-\includegraphics[width=\textwidth]{sage_train.png}
 
 On the benchmark dataset, the minimum value of the MSE metric corresponded to 0.281 with GraphSAGE. 
 \begin{center}
@@ -289,57 +274,63 @@ On the benchmark dataset, the minimum value of the MSE metric corresponded to 0.
  \hline
 \end{tabular}
 \end{center}
-The change in values by epoch on GCN is reflected in the graph:
 
-\includegraphics[width=\textwidth]{gcn_test.png}
-
-The change in values by epoch on GAT is reflected in the graph:
-
-\includegraphics[width=\textwidth]{gat_test.png}
-
-The change in values by epoch on GraphSAGE is reflected in the graph:
-
-\includegraphics[width=\textwidth]{sage_test.png}
-
+GrapSAGE showed the best results on both training and test datasets. At the same time, the results were slightly better than GCN and significantly better than GAT. Perhaps this fact is explained by the fact that GrapSAGE uses deeper connections between nodes in calculations (it considers not only direct neighbors, but also neighbors of other orders). This allows you to bypass the GCN, which does not take into account the like. As for GAT, the reason for the poor results probably turned out to be that GAT uses information from nodes and edges, and edges were not so important for this task.
 If we look for the solubility value by the formula using experimental data, the error can range from 0.5 to 1.6 logarithmic units. Therefore, such indicators for the metric are acceptable for the model and in some cases exceed the accuracy of the calculation using experimental data.
 
 \section{Conclusion}
-The paper considered the problem of predicting solubility in water by molecular structure. The substantiation of the relevance of the task is carried out. The GCN, GAT and GraphSAGE models were used for the solution, those training was performed on the AqSol dataset. The ESOL benchmark was used to test the model.
+The paper considered the problem of predicting aqueous solubility by molecular structure. The substantiation of the relevance of the task is carried out. The GCN, GAT and GraphSAGE models were used for the solution, those training was performed on the AqSol dataset. The ESOL benchmark was used to test the model.
 
 The trained models is able to predict solubility for molecules in the SMILES format.
 
 Metrics show that the quality of the models is comparable to the error that occurs when calculating solubility based on experimental data, and in some cases the models shows better results.
 
-If we compare the results shown by the models, then GraphSAGE showed the best minimum values for the training and test datasets and the best average values for all epochs.
+If we compare the results shown by the models, then GraphSAGE showed the best minimum values for the training and test datasets and the best average values for all epochs. 
 
 \newpage
-\section*{References}
-\begin{thebibliography}{9}
+\begin{thebibliography}{25}
+\bibitem{Sol1}
+Ye, Z., Ouyang, D.  (2021). \emph{Prediction of small-molecule compound solubility in organic solvents by machine learning algorithms}, J Cheminform 13, 98.
+\bibitem{Sol2}
+Lee, S., Lee, M., Gyak, K. W., Kim, S. D., Kim, M. J., Min, K. (2022). \emph{Novel Solubility Prediction Models: Molecular Fingerprints and Physicochemical Features vs Graph Convolutional Neural Networks.} ACS omega, 7(14), 12268–12277.
+\bibitem{SMILES}
+Weininger D. (1988). \emph{SMILES, a chemical language and information system. 1. Introduction to methodology and encoding rules.} J. Chem. Inf. Comput. Sci. 1988, 28, 1, 31–36.
+\bibitem{RDKIT}
+RDKit: Open-source cheminformatics. https://www.rdkit.org
+\bibitem{GCN}
+Kipf, T.N., Welling, M. (2016). \emph{Semi-Supervised Classification with Graph Convolutional Networks.} 5th International Conference on Learning Representations (ICLR-17).
 \bibitem{SAGE}
-Hamilton, W., Ying, Z., Leskovec, J. (2017), \emph{Inductive Representation Learning on Large Graphs}, Advances in Neural Information Processing Systems , 1024-1034.
+Hamilton, W., Ying, Z., Leskovec, J. (2017). \emph{Inductive Representation Learning on Large Graphs}, Advances in Neural Information Processing Systems , 1024-1034.
 \bibitem{GAT}
-Veličković, P., Cucurull, G., Casanova, A., Romero, A., Liò, P., Bengio, Y. (2017), \emph{Graph Attention Networks}, 6th International Conference on Learning Representations.
-\bibitem{NLP-GNN}
-Makarov I, Makarov M, Kiselev D. 2021. \emph{Fusion of text and graph information for machine learning problems on networks.} PeerJ Computer Science 7:e526.
+Veličković, P., Cucurull, G., Casanova, A., Romero, A., Liò, P., Bengio, Y. (2017). \emph{Graph Attention Networks}, 6th International Conference on Learning Representations.
+\bibitem{AqSol}
+Sorkun, M.C., Khetan, A., Er, S. (2019). \emph{AqSolDB, a curated reference set of aqueous solubility and 2D descriptors for a diverse set of compounds.} Sci Data 6, 143.
+\bibitem{ESOL}
+Delaney J. S. (2004). \emph{ESOL: estimating aqueous solubility directly from molecular structure.} Journal of chemical information and computer sciences, 44(3), 1000–1005.
+\bibitem{ChemInf}
+Lo, Y. C., Rensi, S. E., Torng, W., & Altman, R. B. (2018). \emph{Machine learning in chemoinformatics and drug discovery.} Drug discovery today, 23(8), 1538–1546.
+\bibitem{Sol3}
+Deng T., Jia G. (2020). \enph{Prediction of aqueous solubility of compounds based on neural network.} Molecular Physics, 118:2.
+\bibitem{PyG}
+Fey, M., Lenssen, J.E. (2019). \emph{Fast Graph Representation Learning with PyTorch Geometric.}
+\bibitem{MolNet}
+Zhenqin W., Ramsundar B., Feinberg E., Gomes J., Geniesse C., Pappu A., Leswing K. Pande V. (2017). \emph{MoleculeNet: A Benchmark for Molecular Machine Learning.} Chemical Science. 9.
+\bibitem{Sol4}
+Ye, Z., Ouyang, D. (2021). \emph{Prediction of small-molecule compound solubility in organic solvents by machine learning algorithms.} J Cheminform 13, 98.
+\bibitem{Sol5}
+Wu K., Zhao Z., Wang R., Wei G. (2017). \emph{TopP-S: Persistent homology based multi-task deep neural networks for simultaneous predictions of partition coefficient and aqueous solubility.} Journal of Computational Chemistry. 39.
+\bibitem{Sol6}
+Wieder O., Kuenemann M., Wieder M., Seidel T., Meyer C., Langer T. (2021). \emph{Improved Lipophilicity and Aqueous Solubility Prediction With Composite Graph Neural Networks.} 
+\bibitem{Sol7}
+Waqar A., Hilal T., Kil T.C. (2023). \emph{Attention-Based Graph Neural Network for Molecular Solubility Prediction.} ACS Omega 2023 8 (3), 3236-3244.
+\bibitem{Sol8}
+Di, L.; Fish, P. V.; Mano, T. (2012). \emph{Bridging Solubility between Drug Discovery and Development.} Drug Discovery Today 2012, 17 (9–10), 486–495.
+\bibitem{ADME}
+Mandlik V., Bejugam P.R., Singh S. (2016). \emph{Chapter 6 - Application of Artificial Neural Networks in Modern Drug Discovery.} Artificial Neural Network for Drug Design, Delivery and Disposition, Academic Press. Pages 123-139.
+\bibitem{QSPR}
+Meftahi N., Walker M.L., Smith B.J. (2021). \emph{Predicting aqueous solubility by QSPR modeling.} Journal of Molecular Graphics and Modelling, Volume 106.
+
 \end{thebibliography}
 
 
-\end{document} % Конец текста.
-
-// https://users.math.msu.edu/users/weig/paper/p223.pdf
-// https://habr.com/ru/company/vk/blog/557280/
-// https://github.com/Dyakonov/DL/blob/master/ESSE_2021/E103_GNN.pdf
-// https://drive.google.com/file/d/1Oxo4WHLjDBCNoqJX6uxf9KzdF4f1d9tO/view
-// https://mlcourse.at.ispras.ru/wp-content/uploads/2020/11/%D0%9D%D0%B5%D0%B9%D1%80%D0%BE%D0%BD%D0%BD%D1%8B%D0%B5_%D1%81%D0%B5%D1%82%D0%B8_%D0%B4%D0%BB%D1%8F_%D0%B0%D0%BD%D0%B0%D0%BB%D0%B8%D0%B7%D0%B0_%D0%B3%D1%80%D0%B0%D1%84%D0%BE%D0%B2.pdf
-// https://www.nature.com/articles/s41597-019-0151-1
-// https://www.organic-chemistry.org/prog/peo/logS.html - картинка с распределением
-// http://snap.stanford.edu/class/cs224w-2021/slides/01-intro.pdf стр 60 - картинка для генерации
-// https://www.researchgate.net/figure/Different-types-of-graphs-and-their-corresponding-adjacency-matrix-representations-The_fig1_347300725 - картинка для матрицы графа
-// gcn https://tkipf.github.io/graph-convolutional-networks/
-// Kipf-Welling https://arxiv.org/pdf/1609.02907.pdf
-// https://pubmed.ncbi.nlm.nih.gov/15154768/ датасет Delaney
-
-
-// https://arxiv.org/pdf/1710.10903.pdf GAT
-// https://arxiv.org/pdf/1706.02216.pdf GraphSAGE
-// https://peerj.com/articles/cs-526/
+\end{document}
